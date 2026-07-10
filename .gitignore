@@ -1,0 +1,27 @@
+# Environment / secrets
+.env
+.venv/
+venv/
+
+# Personal local config (copy config.example.yaml instead)
+config.yaml
+
+# Downloaded model weights (see docs/OPERATOR_TODO.md step 4 - operator
+# downloads these locally; they don't belong in version control)
+kokoro_model/
+*.pth
+*.pt
+
+# Generated output
+output/
+*.pyc
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Editor/tool local state
+.claude/
+
+# OS/editor cruft
+.DS_Store

@@ -1,0 +1,82 @@
+# Dorosak Podcast Factory - example configuration.
+#
+# Copy this file to config.yaml and edit as needed. Every value shown here
+# is the built-in default - config.yaml only needs to list what you want to
+# override. All paths are resolved relative to --base-dir (the project root
+# by default).
+
+audio:
+  pauses:
+    between_turns_ms: 700       # silence between two different speakers' turns
+    after_host_intro_ms: 1500   # silence after the Host Intro, before dialogue starts
+    between_paragraphs_ms: 400  # silence between paragraphs within one turn
+
+  loudness:
+    target_lufs: -16.0     # integrated loudness target (EBU R128 / podcast standard)
+    true_peak_dbtp: -1.5   # true peak ceiling
+
+  mp3:
+    bitrate_kbps: 128
+    artist: "Dorosak English Podcast"   # ID3 "artist" tag for every episode
+
+  music:
+    # Both are optional - leave unset (or delete these lines) to run with no
+    # music at all. If set, the file MUST exist or the run fails loudly.
+    intro_path: null   # e.g. assets/music/intro.mp3 - fades in, ducks under Host Intro, fades out
+    outro_path: null   # e.g. assets/music/outro.mp3 - short sting appended at the end of the MP3
+    intro_fade_in_ms: 2000
+    intro_fade_out_ms: 1500
+    intro_duck_db: -18.0   # how much intro music is attenuated under the Host Intro
+
+  cache_dir: output/cache   # per-line synthesized WAV cache (see docs/README.md "How reruns work")
+  work_dir: output/work     # scratch space for intermediate files (safe to delete between runs)
+
+tts:
+  engine: null   # e.g. "openai" - overrides auto-detection; leave null to auto-detect (see docs/README.md)
+  model: default # engine-specific model name, e.g. "tts-1" for OpenAI, ignored by engines that don't use it
+  speed: 1.0
+
+  # Per-engine role -> provider voice ID. Only needed to OVERRIDE an
+  # engine's built-in defaults (OpenAI/Azure/Google/Polly ship with sane
+  # defaults; ElevenLabs has none - see docs/ASSETS.md, its voices are
+  # account-specific and MUST be configured here before it can be used).
+  voice_map: {}
+  # Example:
+  # voice_map:
+  #   openai:
+  #     host: onyx
+  #     female_1: nova
+  #   elevenlabs:
+  #     host: <your ElevenLabs voice ID>
+
+  # Per-provider price per character, used only for cost estimation in
+  # `--dry-run` and `cost-report` - editable without touching code.
+  price_per_char: {}
+  # Example:
+  # price_per_char:
+  #   openai: 0.000015
+  #   azure: 0.000016
+
+  # Manually pin a specific character name to a specific voice role,
+  # overriding the automatic first-appearance alternating assignment.
+  character_role_overrides: {}
+  # Example:
+  # character_role_overrides:
+  #   Rosa: female_2
+
+video:
+  resolutions: ["16:9", "9:16"]   # which formats to render; remove one to render only the other
+  font_name: "Noto Sans Arabic"   # must be installed on the system (fontconfig) - has Arabic glyphs
+  title_card_seconds: 6.0         # how long the opening title card is shown
+  vocab_seconds_per_item: 2.0     # vocab end-card hold time, per term
+  vocab_min_seconds: 8.0          # ...but never shorter than this
+  backgrounds_dir: assets/backgrounds       # expects cat{N}.png per category, see docs/ASSETS.md
+  default_background: assets/backgrounds/default.png   # used when a category-specific image is missing
+
+manifest:
+  db_path: output/manifest.sqlite3   # SQLite state: what's been processed, with what content hash
+
+pipeline:
+  input_dir: input     # where category Markdown files live
+  output_dir: output    # where episodes/logs/manifest/cache are written
+  concurrency: 4        # lessons processed in parallel (default: min(4, cpu_count))
