@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 07:28:21 UTC
+Last updated: 2026-07-13 07:28:25 UTC
 
 ## Cat 4 — Expressions & Idioms
 
 - Engine: kokoro
-- Processed: 5/50
+- Processed: 6/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat4:5 — Expressing Disagreement (processed)
+- Last completed: cat4:6 — Asking for Help (processed)
