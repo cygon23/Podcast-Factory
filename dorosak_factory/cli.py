@@ -159,6 +159,7 @@ def _cmd_run(args: argparse.Namespace, config: Config) -> int:
             force=args.force,
             only_category=only_category,
             only_lesson=only_lesson,
+            formats=args.formats,
         )
         to_process = [item for item in plan if item.needs_processing]
 

@@ -163,9 +163,22 @@ class Manifest:
         return [ManifestRecord(**{key: row[key] for key in row.keys()}) for row in rows]
 
     def needs_processing(
-        self, category_number: int, lesson: Lesson, engine: str, force: bool = False
+        self,
+        category_number: int,
+        lesson: Lesson,
+        engine: str,
+        force: bool = False,
+        formats: str = "both",
     ) -> bool:
-        """True if this lesson has no successful up-to-date record for this engine."""
+        """True if this lesson has no successful up-to-date record for this engine/formats.
+
+        `formats` matches the CLI's `--formats` flag: a prior audio-only
+        success does not satisfy a later `--formats video`/`both` request -
+        the manifest tracks video paths separately so switching from audio
+        to video reprocessing (a normal two-pass workflow: audio first,
+        video once it's reviewed) is picked up automatically, no --force
+        needed.
+        """
         if force:
             return True
         record = self.get_record(category_number, lesson.number)
@@ -177,7 +190,13 @@ class Manifest:
             return True
         if record.content_hash != self.compute_content_hash(lesson):
             return True
+        if formats in ("video", "both") and self._video_missing(record):
+            return True
         return False
+
+    @staticmethod
+    def _video_missing(record: ManifestRecord) -> bool:
+        return record.video_16x9_path is None or record.video_9x16_path is None
 
     def plan_run(
         self,
@@ -186,6 +205,7 @@ class Manifest:
         force: bool = False,
         only_category: int | None = None,
         only_lesson: int | None = None,
+        formats: str = "both",
     ) -> list[PlanItem]:
         """Builds the full processing plan: which lessons need work, and why."""
         plan: list[PlanItem] = []
@@ -195,8 +215,10 @@ class Manifest:
             for lesson in category.lessons:
                 if only_lesson is not None and lesson.number != only_lesson:
                     continue
-                needs = self.needs_processing(category.number, lesson, engine, force=force)
-                reason = self._describe_reason(category.number, lesson, engine, force, needs)
+                needs = self.needs_processing(
+                    category.number, lesson, engine, force=force, formats=formats
+                )
+                reason = self._describe_reason(category.number, lesson, engine, force, needs, formats)
                 plan.append(
                     PlanItem(
                         category_number=category.number,
@@ -208,7 +230,13 @@ class Manifest:
         return plan
 
     def _describe_reason(
-        self, category_number: int, lesson: Lesson, engine: str, force: bool, needs: bool
+        self,
+        category_number: int,
+        lesson: Lesson,
+        engine: str,
+        force: bool,
+        needs: bool,
+        formats: str = "both",
     ) -> str:
         if not needs:
             return "up_to_date"
@@ -221,4 +249,6 @@ class Manifest:
             return "previously_failed"
         if record.engine != engine:
             return "engine_changed"
+        if formats in ("video", "both") and self._video_missing(record):
+            return "video_missing"
         return "content_changed"
