@@ -50,7 +50,10 @@ Style: Vocab,{font_name},{font_size},&H00FFFFFF&,&H000000FF&,&H00000000&,&H00000
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"""
 
     title_line = escape_ass_text("Key Vocabulary")
-    term_lines = [escape_ass_text(f"{item.term} — {item.definition}") for item in vocabulary]
+    term_lines = [
+        escape_ass_text(f"{item.term} — {item.definition}" if item.definition else item.term)
+        for item in vocabulary
+    ]
     text = rf"{{\b1}}{title_line}{{\b0}}\N\N" + r"\N".join(term_lines)
 
     start = format_ass_timestamp(start_seconds)

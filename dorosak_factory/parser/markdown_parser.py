@@ -19,6 +19,18 @@ _LEVEL_RE = re.compile(r"Level:\s*(.+?)\s*$")
 _LESSON_HEADER_RE = re.compile(r"^##\s*Lesson\s+(\d+):\s*(.+?)\s*\|\s*(.+?)\s*$")
 _SPEAKER_LINE_RE = re.compile(r"^\*\*([^*]+):\*\*\s*(.*)$")
 _VOCAB_LINE_RE = re.compile(r"^-\s*\*(.+?)\*\s*—\s*(.+?)\s*$")
+_VOCAB_LINE_FALLBACK_RE = re.compile(r"^-\s*(.+?)\s*$")
+
+# Section header labels vary per category - each category thematically
+# renames its sections (e.g. "Key Expressions", "Key Listening Points",
+# "Scenario 1 — Buying multiple items", "Host Intro (Narrator)"). These
+# match the label prefix and any suffix up to the closing "**", rather
+# than requiring the exact literal wording seen in the original two
+# sample files. Verified against every variant present in the real
+# category files available at the time (see test_parser.py).
+_SCENARIO_HEADER_RE = re.compile(r"^\*\*Scenario[^*]*:\*\*")
+_HOST_INTRO_HEADER_RE = re.compile(r"^\*\*Host Intro[^*]*:\*\*")
+_VOCAB_SECTION_HEADER_RE = re.compile(r"^\*\*(?:Key [^*]+|Phrasal Verbs):\*\*")
 
 _DOUBLE_EMPHASIS_RE = re.compile(r"\*\*(.+?)\*\*")
 _SINGLE_EMPHASIS_RE = re.compile(r"\*(.+?)\*")
@@ -121,15 +133,17 @@ def _parse_lesson_block(block: list[str], source_file: str) -> Lesson:
     n = len(block)
     i = 1
 
-    while i < n and not block[i].strip().startswith("**Scenario:**"):
+    while i < n and not _SCENARIO_HEADER_RE.match(block[i].strip()):
         i += 1
     if i >= n:
         raise ValueError("Missing **Scenario:** section")
-    scenario_text = block[i].strip()[len("**Scenario:**") :].strip()
+    scenario_line = block[i].strip()
+    scenario_header_match = _SCENARIO_HEADER_RE.match(scenario_line)
+    scenario_text = scenario_line[scenario_header_match.end() :].strip()
     scenario = strip_emphasis(scenario_text)
     i += 1
 
-    while i < n and not block[i].strip().startswith("**Host Intro:**"):
+    while i < n and not _HOST_INTRO_HEADER_RE.match(block[i].strip()):
         i += 1
     if i >= n:
         raise ValueError("Missing **Host Intro:** section")
@@ -168,7 +182,7 @@ def _parse_lesson_block(block: list[str], source_file: str) -> Lesson:
                 )
             )
 
-    while i < n and not block[i].strip().startswith("**Key Vocabulary:**"):
+    while i < n and not _VOCAB_SECTION_HEADER_RE.match(block[i].strip()):
         stripped = block[i].strip()
         if stripped == "---":
             i += 1
@@ -198,14 +212,24 @@ def _parse_lesson_block(block: list[str], source_file: str) -> Lesson:
     if not turns:
         raise ValueError("No dialogue turns found")
 
-    i += 1  # skip the '**Key Vocabulary:**' heading line
+    i += 1  # skip the vocab section heading line
     vocabulary: list[VocabItem] = []
     while i < n and block[i].strip() not in ("---", ""):
-        vocab_match = _VOCAB_LINE_RE.match(block[i].strip())
+        stripped = block[i].strip()
+        vocab_match = _VOCAB_LINE_RE.match(stripped)
         if vocab_match:
             term = strip_emphasis(vocab_match.group(1))
             definition = vocab_match.group(2).strip()
             vocabulary.append(VocabItem(term=term, definition=definition))
+        else:
+            # Some categories (e.g. "Key Listening Points") use plain
+            # bullet points instead of "*Term* — definition" pairs. Keep
+            # the whole line as the term with an empty definition rather
+            # than dropping real content.
+            fallback_match = _VOCAB_LINE_FALLBACK_RE.match(stripped)
+            if fallback_match:
+                term = strip_emphasis(fallback_match.group(1))
+                vocabulary.append(VocabItem(term=term, definition=""))
         i += 1
     if not vocabulary:
         raise ValueError("No vocabulary items found")

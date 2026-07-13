@@ -253,3 +253,162 @@ This lesson is missing all required sections and should fail to parse.
     assert len(category.parse_errors) == 1
     assert category.parse_errors[0].file == str(bad_file)
     assert "Lesson 2" in category.parse_errors[0].lesson_header
+
+
+def _make_fixture(scenario_header, host_intro_header, vocab_header, tmp_path):
+    content = f"""# Category 99: Test — عنوان تجريبي
+## Dorosak English Podcast | Level: Beginner
+## All 1 Podcast Dialogue Scripts
+
+---
+
+## Lesson 1: A Lesson | درس
+
+{scenario_header} A working lesson.
+
+{host_intro_header}
+Intro text.
+
+---
+**Tom:** Hello there.
+
+{vocab_header}
+- *Word* — a definition
+
+---
+"""
+    fixture_path = tmp_path / "cat99_variant_test.md"
+    fixture_path.write_text(content, encoding="utf-8")
+    return fixture_path
+
+
+def test_host_intro_with_narrator_suffix_parses(tmp_path):
+    # Real file: cat04_expressions_idioms - "**Host Intro (Narrator):**"
+    fixture = _make_fixture(
+        "**Scenario:**", "**Host Intro (Narrator):**", "**Key Vocabulary:**", tmp_path
+    )
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+    assert category.lessons[0].host_intro == "Intro text."
+
+
+def test_key_expressions_vocab_header_parses(tmp_path):
+    # Real file: cat04_expressions_idioms - "**Key Expressions:**" instead of Vocabulary
+    fixture = _make_fixture("**Scenario:**", "**Host Intro:**", "**Key Expressions:**", tmp_path)
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+    assert category.lessons[0].vocabulary[0].term == "Word"
+
+
+def test_key_listening_points_vocab_header_parses(tmp_path):
+    # Real file: cat05_reallife_listening - "**Key Listening Points:**"
+    fixture = _make_fixture("**Scenario:**", "**Host Intro:**", "**Key Listening Points:**", tmp_path)
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+
+
+def test_numbered_scenario_header_with_dash_suffix_parses(tmp_path):
+    # Real file: a shopping-category lesson - "**Scenario 1 — Buying multiple items:**"
+    fixture = _make_fixture(
+        "**Scenario 1 — Buying multiple items:**", "**Host Intro:**", "**Key Vocabulary:**", tmp_path
+    )
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+    assert category.lessons[0].scenario == "A working lesson."
+
+
+def test_plain_headers_still_work_unchanged(tmp_path):
+    fixture = _make_fixture("**Scenario:**", "**Host Intro:**", "**Key Vocabulary:**", tmp_path)
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+    assert category.lessons[0].scenario == "A working lesson."
+    assert category.lessons[0].host_intro == "Intro text."
+    assert category.lessons[0].vocabulary[0].term == "Word"
+
+
+def test_phrasal_verbs_vocab_header_parses(tmp_path):
+    # Real file: cat04_expressions_idioms, "Phrasal Verbs with GET/TAKE/GO"
+    # lessons use "**Phrasal Verbs:**" - the one header that doesn't start
+    # with "Key " among everything scanned across the real files.
+    fixture = _make_fixture("**Scenario:**", "**Host Intro:**", "**Phrasal Verbs:**", tmp_path)
+    category = parse_category_file(fixture)
+    assert category.parse_errors == []
+    assert category.lessons[0].vocabulary[0].term == "Word"
+
+
+def test_vocab_bullet_without_term_definition_separator_falls_back_to_plain_text(tmp_path):
+    # Real file: cat05_reallife_listening's "Key Listening Points" bullets
+    # are plain sentences, not "*Term* — definition" pairs, e.g.
+    # "- How to open an interview confidently".
+    content = """# Category 99: Test — عنوان تجريبي
+## Dorosak English Podcast | Level: Beginner
+## All 1 Podcast Dialogue Scripts
+
+---
+
+## Lesson 1: A Lesson | درس
+
+**Scenario:** A working lesson.
+
+**Host Intro:**
+Intro text.
+
+---
+**Tom:** Hello there.
+
+**Key Listening Points:**
+- How to open an interview confidently
+- Describing experience clearly
+
+---
+"""
+    fixture_path = tmp_path / "cat99_listening_points.md"
+    fixture_path.write_text(content, encoding="utf-8")
+
+    category = parse_category_file(fixture_path)
+
+    assert category.parse_errors == []
+    assert category.lessons[0].vocabulary[0].term == "How to open an interview confidently"
+    assert category.lessons[0].vocabulary[0].definition == ""
+    assert category.lessons[0].vocabulary[1].term == "Describing experience clearly"
+
+
+def test_all_real_vocab_header_variants_are_handled():
+    # Every variant actually observed across the real category files - a
+    # regression net so a future file introducing yet another "Key X:"
+    # phrasing gets caught here first, not as a silent parse failure.
+    known_variants = [
+        "Key Academic Phrases",
+        "Key Acceptance Phrases",
+        "Key Agreement Expressions",
+        "Key Business Phrases",
+        "Key Certainty Expressions",
+        "Key Clarification Phrases",
+        "Key Communication Phrases",
+        "Key Confirmation Phrases",
+        "Key Disagreement Phrases",
+        "Key Doubt Expressions",
+        "Key Excitement Expressions",
+        "Key Expressions",
+        "Key Finance Vocabulary",
+        "Key Happiness Expressions",
+        "Key Listening Points",
+        "Key Movie Vocabulary",
+        "Key Music Vocabulary",
+        "Key Permission Phrases",
+        "Key Phrases for Repetition",
+        "Key Proverbs",
+        "Key Refusal Phrases",
+        "Key Rejection Phrases",
+        "Key Sadness Expressions",
+        "Key Small Talk Features",
+        "Key Sports Vocabulary",
+        "Key Suggestion Phrases",
+        "Key Surprise Expressions",
+        "Key Technology Vocabulary",
+        "Key Vocabulary",
+    ]
+    from dorosak_factory.parser.markdown_parser import _VOCAB_SECTION_HEADER_RE
+
+    for variant in known_variants:
+        assert _VOCAB_SECTION_HEADER_RE.match(f"**{variant}:**"), f"{variant!r} not matched"
