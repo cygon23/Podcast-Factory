@@ -1,5 +1,6 @@
 # Core (always required)
 PyYAML>=6.0
+python-dotenv>=1.0
 
 # Cloud TTS provider SDKs - install only the ones for the engine(s) you'll
 # actually use (see OPERATOR_TODO.md). Importing dorosak_factory.tts.engines

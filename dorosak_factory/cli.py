@@ -13,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 import dorosak_factory.tts.engines  # noqa: F401 - import side-effect registers built-in engines
 from dorosak_factory.audio.cache import LineCache
 from dorosak_factory.config import Config, load_config
@@ -85,6 +87,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+
+    # Load .env into the process environment before anything reads
+    # os.environ (engine credential detection, is_available() checks).
+    # Does not override variables already set in the real shell environment.
+    env_path = Path(args.base_dir) / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+
     config = load_config(args.config, base_dir=args.base_dir)
 
     if args.command == "run":
