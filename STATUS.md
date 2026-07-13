@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 07:53:52 UTC
+Last updated: 2026-07-13 08:00:18 UTC
 
-## Cat 4 — Expressions & Idioms
+## Cat 5 — Real-life Listening
 
 - Engine: kokoro
-- Processed: 50/50
+- Processed: 1/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat4:50 — Expressions for Daily Routines (processed)
+- Last completed: cat5:3 — Business Meeting (processed)
