@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 07:42:50 UTC
+Last updated: 2026-07-13 07:42:58 UTC
 
 ## Cat 4 — Expressions & Idioms
 
 - Engine: kokoro
-- Processed: 30/50
+- Processed: 31/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat4:30 — Expressions for Shopping (processed)
+- Last completed: cat4:31 — Expressions for Traveling (processed)
