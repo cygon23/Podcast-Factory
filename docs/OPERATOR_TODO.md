@@ -277,6 +277,20 @@ output. If it instead says a different engine (or errors out listing what
 to configure), double check the three paths in `.env` are correct,
 absolute, and that the files actually exist at those paths.
 
+### 4.6 First real synthesis: a one-time extra download you'll see
+
+The **first** time you actually synthesize audio (not `--dry-run` — an
+actual `run`), kokoro's own text-processing dependency (`spacy`'s English
+model, `en_core_web_sm`, ~13 MB) downloads and installs itself
+automatically if it isn't already present. You'll see lines like
+`Collecting en-core-web-sm==3.8.0 ... Successfully installed` scroll by.
+
+This is real network access happening outside this project's control (deep
+inside kokoro's own dependency chain, not something our adapter code
+triggers or can prevent) — flagging it here so it doesn't look like this
+project silently downloading something. It only happens once; every run
+after that reuses the installed package with no network access.
+
 ---
 
 ## Step 5 — Azure Cognitive Services Speech

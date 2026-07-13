@@ -340,3 +340,32 @@ Intro wording — the manifest's content-hash diffing won't catch this on
 its own since the source Markdown didn't change, only the pipeline logic
 did (a `--force` rerun, or a manifest-engine-version bump, is needed to
 trigger reprocessing of already-"successful" lessons).
+
+## Changelog: two more bugs found via a real (non-mocked) run
+
+Getting an actual Kokoro synthesis working on the operator's machine
+surfaced two more real gaps that unit tests with mocked engines couldn't
+have caught:
+
+1. **`.env` was never actually loaded.** Every engine's `is_available()`
+   reads `os.environ`, every doc told the operator to create `.env`, but
+   nothing anywhere ever loaded that file into the running process -
+   `run --dry-run` always reported "No TTS engine available" regardless
+   of what was in `.env`. Fixed with `python-dotenv`, loaded once at the
+   top of `cli.py`'s `main()`, before config/engine resolution. Added
+   `tests/test_env_loading.py`. This is the kind of gap that's invisible
+   to a test suite that always passes explicit env dicts directly and
+   never exercises the real CLI entry point against a real file - worth
+   remembering for future integration tests.
+2. **Kokoro's own dependency chain downloads a spaCy model on first real
+   use.** `misaki`/kokoro's English G2P component pulls `en_core_web_sm`
+   (~13 MB) via pip automatically the first time text is actually
+   synthesized (not on `--dry-run`, which never reaches this code path -
+   that's why it wasn't caught earlier). This is real network access
+   this project doesn't control (it's inside kokoro's own dependency, not
+   our adapter code) - documented in `docs/OPERATOR_TODO.md` step 4.6 so
+   it doesn't read as this project silently downloading something. One
+   real end-to-end lesson (`cat30:1`, audio only) completed successfully
+   after this: 102.5s of real audio, correct "Podcast 1" ID3 title,
+   zero validation failures - the first genuine (non-`NullEngine`) proof
+   the full pipeline works.
