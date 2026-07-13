@@ -9,6 +9,7 @@ INSTRUCTIONS.md 4.6 ("start time = running offset incl. pauses").
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,20 @@ from dorosak_factory.config import AudioConfig
 from dorosak_factory.parser.models import Category, Lesson
 from dorosak_factory.tts.base import TTSEngine
 from dorosak_factory.tts.voice_roles import assign_voice_roles
+
+_LESSON_LABEL_RE = re.compile(r"\bLesson\s+(\d+)\b")
+
+
+def rename_lesson_to_podcast(text: str) -> str:
+    """Rewrites "Lesson {N}" to "Podcast {N}" - client-facing labeling requirement.
+
+    Source Markdown scripts say "Lesson N" in the spoken Host Intro (e.g.
+    "Category 30 ... Lesson 1."); the client wants every episode to open
+    with "Podcast N" instead, in the actual narration, not just filenames
+    or metadata. Applied only to the Host Intro - "Lesson" never appears
+    in dialogue turns or vocabulary in the real source files.
+    """
+    return _LESSON_LABEL_RE.sub(r"Podcast \1", text)
 
 
 @dataclass(frozen=True)
@@ -96,7 +111,8 @@ def assemble_lesson_audio(
         running_offset += duration_ms / 1000.0
 
     # --- Host Intro (always role "host"; optionally has intro music mixed under it) ---
-    host_result = synthesize_line(lesson.host_intro, "host")
+    host_intro_text = rename_lesson_to_podcast(lesson.host_intro)
+    host_result = synthesize_line(host_intro_text, "host")
     total_characters += host_result.characters
     host_segment_path = host_result.wav_path
     if config.music.intro_path is not None:
@@ -111,7 +127,7 @@ def assemble_lesson_audio(
         )
         host_segment_path = mixed_path
     segments.append(host_segment_path)
-    timeline.append(LineTiming("Host", lesson.host_intro, 0.0, host_result.duration_seconds))
+    timeline.append(LineTiming("Host", host_intro_text, 0.0, host_result.duration_seconds))
     running_offset = host_result.duration_seconds
 
     add_pause(config.pauses.after_host_intro_ms)

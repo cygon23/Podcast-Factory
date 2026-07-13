@@ -7,7 +7,7 @@ from dorosak_factory.subtitles.title_card import generate_title_card_ass
 from dorosak_factory.subtitles.vocab_card import compute_vocab_card_duration, generate_vocab_card_ass
 
 
-def test_title_card_contains_category_lesson_and_both_titles():
+def test_title_card_contains_category_podcast_number_and_both_titles():
     ass = generate_title_card_ass(
         category_number=30,
         lesson_number=1,
@@ -16,7 +16,7 @@ def test_title_card_contains_category_lesson_and_both_titles():
         video_width=1920,
         video_height=1080,
     )
-    assert "Cat 30 · Lesson 1" in ass
+    assert "Cat 30 · Podcast 1" in ass
     assert "Talking About Today's Weather" in ass
     assert "الحديث عن طقس اليوم" in ass
     assert ass.count("Dialogue:") == 1

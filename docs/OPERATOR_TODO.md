@@ -193,11 +193,13 @@ hf download hexgrad/Kokoro-82M kokoro-v1_0.pth --local-dir ./kokoro_model
 ```
 
 Download the 6 voice files this project's default configuration uses
-(about 500 KB each, ~3 MB total):
+(about 500 KB each, ~3 MB total). All six are American voices
+(Kokoro's naming: `a` = American, `b` = British) — this project requires
+American accent only, so never substitute a `b`-prefixed voice here:
 ```bash
 hf download hexgrad/Kokoro-82M \
   voices/am_michael.pt voices/af_bella.pt voices/am_adam.pt \
-  voices/af_sarah.pt voices/bm_george.pt voices/af_nicole.pt \
+  voices/af_sarah.pt voices/am_echo.pt voices/af_nicole.pt \
   --local-dir ./kokoro_model
 ```
 
@@ -211,7 +213,7 @@ kokoro_model/
     af_bella.pt
     am_adam.pt
     af_sarah.pt
-    bm_george.pt
+    am_echo.pt
     af_nicole.pt
 ```
 

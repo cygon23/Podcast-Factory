@@ -42,7 +42,7 @@ Style: Title,{font_name},{font_size},&H00FFFFFF&,&H000000FF&,&H00000000&,&H00000
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"""
 
-    first_line = escape_ass_text(f"Cat {category_number} · Lesson {lesson_number}")
+    first_line = escape_ass_text(f"Cat {category_number} · Podcast {lesson_number}")
     english_line = escape_ass_text(title_en)
     arabic_line = escape_ass_text(title_ar)
     text = rf"{first_line}\N{english_line}\N{arabic_line}"

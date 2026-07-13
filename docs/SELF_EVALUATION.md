@@ -294,3 +294,49 @@ silently deviating from the stated sequence.
 None of these were hidden during the build — each was flagged in this
 document at the point it applies, with the reasoning for why it's a gap
 rather than a silent shortcut.
+
+## Changelog: fixes from real team/client feedback (post-delivery)
+
+A team review thread surfaced two concrete, verified requirements that
+weren't in the original `INSTRUCTIONS.md` and were fixed in response:
+
+1. **American accent only, never British.** Audited every engine's
+   default voice map against real provider data (Azure/Google encode
+   locale directly in the voice name; Polly's 6 default voices verified
+   against AWS's official voice table — all `English (US)`). Found one
+   real violation: `KokoroEngine.DEFAULT_VOICE_MAP["male_2"]` was
+   `bm_george` — Kokoro's naming prefixes voices `a` (American) / `b`
+   (British), so this was a genuine British-voice default. Fixed to
+   `am_echo`. Added `test_default_voice_map_is_american_only`, which
+   asserts every Kokoro default voice starts with `a`, so this class of
+   regression can't reoccur silently. Updated `docs/OPERATOR_TODO.md`'s
+   download command to match.
+2. **Episodes must open with "Podcast N," not "Lesson N."** This turned
+   out to be more than a label change: the real source Markdown scripts
+   literally speak "Lesson N" in the Host Intro text that gets
+   synthesized (verified against `new_inputs/MDFiles/.../cat07_academic_english...md`).
+   Added `rename_lesson_to_podcast()` in `audio/assembly.py`, applied to
+   the Host Intro before synthesis so the word actually spoken changes
+   (and the subtitle/timeline text matches what's spoken). Also updated
+   the two written surfaces that said "Lesson N": the MP3 ID3 title
+   (`audio/mp3_export.py`) and the video title card
+   (`subtitles/title_card.py`). Scope check: confirmed via the real files
+   that "Lesson N" only ever appears in the Markdown header (structural,
+   never rendered to the listener) and the Host Intro (spoken) — never
+   inside dialogue turns or vocabulary — so no other transform was needed.
+3. **"Voices should be different for all the podcasts"** — interpreted as
+   already satisfied (each speaker within an episode already gets a
+   distinct voice via `tts/voice_roles.py`) rather than a request for
+   voice variety *between* different episodes, based on context (said in
+   the same breath as a listening-QA pass across sample episodes). This
+   was my call, not a silent guess — I flagged the ambiguity to the
+   operator and they deferred the decision back to me; recording the
+   reasoning here in case it turns out to mean something else.
+
+Not yet addressed from that same thread: the ~500 lessons already
+delivered in the first batch (10 categories) were produced before these
+fixes and will need regenerating with the corrected voice map and Host
+Intro wording — the manifest's content-hash diffing won't catch this on
+its own since the source Markdown didn't change, only the pipeline logic
+did (a `--force` rerun, or a manifest-engine-version bump, is needed to
+trigger reprocessing of already-"successful" lessons).

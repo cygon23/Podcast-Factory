@@ -24,9 +24,13 @@ class ID3Tags:
 
 
 def build_id3_tags(category: Category, lesson: Lesson, cover_art_path: Path | None = None) -> ID3Tags:
-    """Builds ID3Tags per INSTRUCTIONS.md 4.5: title "Cat {N} · Lesson {M} — {title}"."""
+    """Builds ID3Tags: title "Cat {N} · Podcast {M} — {title}".
+
+    Uses "Podcast", not "Lesson" - client-facing labeling requirement
+    (see docs/SELF_EVALUATION.md changelog for the feedback this responds to).
+    """
     return ID3Tags(
-        title=f"Cat {category.number} · Lesson {lesson.number} — {lesson.title_en}",
+        title=f"Cat {category.number} · Podcast {lesson.number} — {lesson.title_en}",
         artist=DEFAULT_ARTIST,
         album=category.title_en,
         track_number=lesson.number,

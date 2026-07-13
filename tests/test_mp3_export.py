@@ -121,7 +121,7 @@ def test_build_id3_tags_formats_title_per_spec():
 
     tags = build_id3_tags(category, lesson)
 
-    assert tags.title == "Cat 30 · Lesson 1 — Talking About Today's Weather"
+    assert tags.title == "Cat 30 · Podcast 1 — Talking About Today's Weather"
     assert tags.album == "English for Weather & Nature Daily Life"
     assert tags.track_number == 1
     assert tags.artist == "Dorosak English Podcast"

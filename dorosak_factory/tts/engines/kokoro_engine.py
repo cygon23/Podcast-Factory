@@ -46,15 +46,17 @@ class KokoroEngine(TTSEngine):
 
     name = "kokoro"
 
-    # Kokoro's published voicepack names (American/British x female/male);
-    # verify against the operator's actual downloaded model - voice
-    # availability can change between model releases.
+    # Kokoro's published voicepack names use an accent+gender prefix: "a" =
+    # American, "b" = British. Every role here is deliberately pinned to an
+    # "a"-prefixed (American) voice - American accent only is a hard
+    # requirement (client feedback, see docs/SELF_EVALUATION.md changelog).
+    # Do not add a "b"-prefixed voice as a default here.
     DEFAULT_VOICE_MAP = {
         "host": "am_michael",
         "female_1": "af_bella",
         "male_1": "am_adam",
         "female_2": "af_sarah",
-        "male_2": "bm_george",
+        "male_2": "am_echo",
         "neutral_1": "af_nicole",
     }
 

@@ -102,10 +102,38 @@ def test_id3_tags_match_spec(tmp_path, category, lesson, engine, cache, fast_con
     assemble_lesson_audio(category, lesson, engine, cache, fast_config, output_mp3)
 
     tags = ffprobe_format(output_mp3)["tags"]
-    assert tags["title"] == "Cat 99 · Lesson 1 — A Tiny Test Lesson"
+    assert tags["title"] == "Cat 99 · Podcast 1 — A Tiny Test Lesson"
     assert tags["album"] == "Test Category"
     assert tags["artist"] == "Dorosak English Podcast"
     assert tags["track"] == "1"
+
+
+def test_spoken_host_intro_says_podcast_not_lesson(tmp_path, category, engine, cache, fast_config):
+    # Real source files literally spell out "Lesson N" in the Host Intro
+    # text that gets synthesized - this must become "Podcast N" in what's
+    # actually spoken (and therefore in the subtitle timeline too), not
+    # just in the ID3 title/video title card.
+    lesson_with_realistic_intro = Lesson(
+        number=1,
+        title_en="A Tiny Test Lesson",
+        title_ar="ar",
+        scenario="s",
+        host_intro="Category 99 — Test Category, Lesson 1. Let's begin.",
+        turns=(DialogueTurn(speaker="Tom", raw_speaker_label="Tom", paragraphs=("Hi.",)),),
+        vocabulary=(VocabItem(term="Well", definition="in good health"),),
+        source_file="fixture.md",
+        raw_header="## Lesson 1",
+    )
+    output_mp3 = tmp_path / "episode.mp3"
+
+    result = assemble_lesson_audio(
+        category, lesson_with_realistic_intro, engine, cache, fast_config, output_mp3
+    )
+
+    host_timeline_entry = result.timeline[0]
+    assert host_timeline_entry.speaker == "Host"
+    assert "Podcast 1" in host_timeline_entry.text
+    assert "Lesson 1" not in host_timeline_entry.text
 
 
 def test_timeline_covers_host_intro_and_every_turn(

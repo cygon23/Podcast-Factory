@@ -62,6 +62,15 @@ def test_device_detection_falls_back_to_cpu_without_gpu():
     assert KokoroEngine._detect_device() == "cpu"
 
 
+def test_default_voice_map_is_american_only():
+    # Client requirement: American accent only, never British. Kokoro's
+    # voice names are prefixed "a" (American) or "b" (British) - a "b"
+    # default here would silently ship a British voice (this caught a
+    # real bug: male_2 previously defaulted to "bm_george").
+    for role, voice_name in KokoroEngine.DEFAULT_VOICE_MAP.items():
+        assert voice_name.startswith("a"), f"role '{role}' defaults to non-American voice '{voice_name}'"
+
+
 def _make_fake_segment(num_samples=2400):
     segment = MagicMock()
     segment.audio = torch.zeros(num_samples)
