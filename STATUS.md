@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 06:35:11 UTC
+Last updated: 2026-07-13 07:26:01 UTC
 
-## Cat 30 — English for Weather & Nature Daily Life
+## Cat 4 — Expressions & Idioms
 
 - Engine: kokoro
-- Processed: 3/50
+- Processed: 1/50
 - Failed: 0
-- Skipped: 47
-- Last completed: cat30:13 — Talking About Nature Walks (processed)
+- Skipped: 0
+- Last completed: cat4:2 — Expressing Thanks (processed)
