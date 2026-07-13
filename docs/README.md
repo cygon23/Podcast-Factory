@@ -193,6 +193,16 @@ hard design requirement. Steps:
 That's it — CLI, manifest, caching, audio assembly, and validation all work
 against the `TTSEngine` interface and need zero changes.
 
+## Video renderers
+
+Video goes through the same pluggable pattern as TTS: `video/renderer_base.py`
+(the `VideoRenderer` interface), `video/renderer_registry.py` (auto-detection
+chain, `--renderer` override), `video/renderers/` (one adapter per backend).
+Today's only renderer is `static_background` (looped image + burned ASS
+subtitles — real, tested, on by default). See `VIDEO_RENDERER_ROADMAP.md` for
+the planned local AI-avatar renderer (FLUX.1 + LivePortrait/MuseTalk) and how
+future cloud API renderers (HeyGen, D-ID, ...) plug in the same way.
+
 ## Testing
 
 ```bash

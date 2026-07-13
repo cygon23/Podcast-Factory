@@ -16,6 +16,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import dorosak_factory.tts.engines  # noqa: F401 - import side-effect registers built-in engines
+import dorosak_factory.video.renderers  # noqa: F401 - import side-effect registers built-in renderers
 from dorosak_factory.audio.cache import LineCache
 from dorosak_factory.config import Config, load_config
 from dorosak_factory.manifest.store import Manifest
@@ -25,6 +26,7 @@ from dorosak_factory.pipeline import estimate_characters, process_lesson, record
 from dorosak_factory.report.run_report import LessonOutcome, RunReport
 from dorosak_factory.report.status_sync import render_status_markdown, write_and_push_status
 from dorosak_factory.tts.registry import EngineResolutionError, resolve_engine_class
+from dorosak_factory.video.renderer_registry import RendererResolutionError, resolve_renderer_class
 
 
 def discover_categories(input_dir: Path) -> tuple[list[Category], list[str]]:
@@ -69,6 +71,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Process new/changed/failed lessons")
     run_parser.add_argument("--engine", default=None, help="Override auto-detected engine")
+    run_parser.add_argument("--renderer", default=None, help="Override auto-detected video renderer")
     run_parser.add_argument("--force", action="store_true", help="Reprocess every lesson")
     run_parser.add_argument("--only", default=None, help='One lesson ("cat31:5") or category ("cat31")')
     run_parser.add_argument("--formats", choices=["audio", "video", "both"], default="both")
@@ -151,6 +154,15 @@ def _cmd_run(args: argparse.Namespace, config: Config) -> int:
     engine_name = engine_cls.name
     _append_run_log(log_path, f"Engine resolved: {engine_name}")
 
+    renderer_name_explicit = args.renderer or config.video.renderer
+    try:
+        renderer_cls = resolve_renderer_class(explicit=renderer_name_explicit)
+    except RendererResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+        _append_run_log(log_path, f"RENDERER RESOLUTION ERROR: {exc}")
+        return 1
+    _append_run_log(log_path, f"Renderer resolved: {renderer_cls.name}")
+
     manifest = Manifest(db_path=config.manifest.db_path)
     try:
         plan = manifest.plan_run(
@@ -173,6 +185,7 @@ def _cmd_run(args: argparse.Namespace, config: Config) -> int:
             categories,
             engine_cls,
             engine_name,
+            renderer_cls,
             config,
             manifest,
             args.formats,
@@ -209,6 +222,7 @@ def _execute_run(
     categories,
     engine_cls,
     engine_name,
+    renderer_cls,
     config,
     manifest,
     formats,
@@ -217,6 +231,7 @@ def _execute_run(
     only_category: int | None = None,
 ) -> tuple[int, str]:
     engine = engine_cls.from_config(config)
+    renderer = renderer_cls.from_config(config)
     cache = LineCache(cache_dir=config.audio.cache_dir)
     categories_by_number = {c.number: c for c in categories}
 
@@ -252,7 +267,7 @@ def _execute_run(
     def run_one(item):
         category = categories_by_number[item.category_number]
         result = process_lesson(
-            category, item.lesson, engine, engine_name, cache, config, formats=formats
+            category, item.lesson, engine, engine_name, cache, config, renderer, formats=formats
         )
         record_result(manifest, item.category_number, item.lesson, engine_name, result)
         return item, result

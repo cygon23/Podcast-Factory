@@ -19,7 +19,7 @@ from dorosak_factory.subtitles.ass import write_ass
 from dorosak_factory.subtitles.srt import write_srt
 from dorosak_factory.tts.base import TTSEngine
 from dorosak_factory.validate.episode import EpisodeValidationResult, validate_episode
-from dorosak_factory.video.builder import VideoBuildResult, build_video
+from dorosak_factory.video.renderer_base import VideoBuildResult, VideoRenderer
 
 RESOLUTION_BY_LABEL = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
 
@@ -54,6 +54,7 @@ def process_lesson(
     engine_name: str,
     cache: LineCache,
     config: Config,
+    renderer: VideoRenderer,
     formats: str = "both",
     min_duration_seconds: float = 30.0,
 ) -> LessonProcessResult:
@@ -92,27 +93,19 @@ def process_lesson(
                     video_height=height,
                     font_name=config.video.font_name,
                 )
-                background_path = config.video.backgrounds_dir / f"cat{category.number}.png"
-                if not background_path.exists():
-                    background_path = config.video.default_background
                 output_mp4 = lesson_dir / f"video_{label.replace(':', 'x')}.mp4"
                 work_dir = (
                     config.audio.work_dir / f"video_cat{category.number}_lesson{lesson.number}_{label}"
                 )
-                video_results[label] = build_video(
+                video_results[label] = renderer.render(
                     category,
                     lesson,
                     mp3_path,
                     dialogue_ass_path,
-                    background_path,
                     output_mp4,
                     work_dir,
                     width,
                     height,
-                    font_name=config.video.font_name,
-                    title_card_seconds=config.video.title_card_seconds,
-                    vocab_seconds_per_item=config.video.vocab_seconds_per_item,
-                    vocab_min_seconds=config.video.vocab_min_seconds,
                 )
 
         metadata_path = lesson_dir / "metadata.json"

@@ -76,6 +76,7 @@ class TTSConfig:
 class VideoConfig:
     """Video rendering settings shared by 16:9 and 9:16 (section 4.6)."""
 
+    renderer: str | None = None  # None -> auto-detection chain
     resolutions: tuple[str, ...] = ("16:9", "9:16")
     font_name: str = "Noto Sans Arabic"
     title_card_seconds: float = 6.0
