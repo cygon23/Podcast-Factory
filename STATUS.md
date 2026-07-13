@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 08:08:11 UTC
+Last updated: 2026-07-13 08:09:59 UTC
 
 ## Cat 5 — Real-life Listening
 
 - Engine: kokoro
-- Processed: 12/50
+- Processed: 13/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat5:11 — Restaurant Service Dialogue (processed)
+- Last completed: cat5:13 — TV News Broadcast (processed)
