@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 07:38:32 UTC
+Last updated: 2026-07-13 07:40:24 UTC
 
 ## Cat 4 — Expressions & Idioms
 
 - Engine: kokoro
-- Processed: 24/50
+- Processed: 25/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat4:23 — Proverbs About Learning (processed)
+- Last completed: cat4:25 — Phrasal Verbs with TAKE (processed)
