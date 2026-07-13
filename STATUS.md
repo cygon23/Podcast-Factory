@@ -1,11 +1,11 @@
 # Live Run Status
 
-Last updated: 2026-07-13 08:22:02 UTC
+Last updated: 2026-07-13 08:23:00 UTC
 
 ## Cat 5 — Real-life Listening
 
 - Engine: kokoro
-- Processed: 25/50
+- Processed: 26/50
 - Failed: 0
 - Skipped: 0
-- Last completed: cat5:25 — Public Speech (processed)
+- Last completed: cat5:27 — Job Training Session (processed)
