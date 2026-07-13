@@ -20,6 +20,10 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# Staging area for incoming category files / review media not yet
+# merged into input/ (see docs/README.md "Adding a new lesson file")
+new_inputs/
+
 # Editor/tool local state
 .claude/
 
