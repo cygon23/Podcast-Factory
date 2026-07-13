@@ -167,3 +167,51 @@ def test_unknown_explicit_engine_fails_cleanly(project, capsys):
 
     assert exit_code == 1
     assert "Unknown engine" in error_output
+
+
+def test_live_status_outside_a_git_repo_does_not_crash_the_run(project, capsys):
+    # project fixture is a plain tmp_path, not a git repo - proves the
+    # opt-in flag degrades gracefully rather than breaking real work.
+    exit_code = main(
+        ["--base-dir", str(project), "run", "--engine", "null", "--formats", "audio", "--live-status"]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1  # NullEngine silence still fails loudness, as always
+    assert "Processed: 0" in output
+    assert "Failed:    2" in output
+
+
+@pytest.fixture
+def git_project(project):
+    """Turns the `project` fixture into a real git repo with a remote, for --live-status."""
+    import subprocess
+
+    bare = project.parent / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=project, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=project, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=project, check=True)
+    (project / "README.md").write_text("init\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "push", "origin", "HEAD"], cwd=project, check=True, capture_output=True)
+    return project, bare
+
+
+def test_live_status_pushes_status_md_to_the_remote(git_project, capsys):
+    import subprocess
+
+    project, bare = git_project
+
+    main(["--base-dir", str(project), "run", "--engine", "null", "--formats", "audio", "--live-status"])
+    capsys.readouterr()
+
+    assert (project / "STATUS.md").exists()
+    remote_content = subprocess.run(
+        ["git", "show", "HEAD:STATUS.md"], cwd=bare, capture_output=True, text=True, check=True
+    ).stdout
+    assert "cat99" in remote_content or "All categories" in remote_content
+    assert "Processed: 0" in remote_content  # both lessons fail loudness, as always with NullEngine
+    assert "Failed: 2" in remote_content

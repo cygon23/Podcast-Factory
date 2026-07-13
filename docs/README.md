@@ -85,6 +85,24 @@ turns 1–11.
 Use `--force` to reprocess everything regardless of state, or `--only
 cat31:5` / `--only cat31` to scope a run to one lesson or category.
 
+## Watching a run live from GitHub
+
+`--live-status` commits and pushes a `STATUS.md` file (progress counts,
+last-completed lesson, any failures) to the repo after every completed
+lesson, so a team can watch a long batch progress from GitHub without
+needing access to the machine running it:
+
+```bash
+python -m dorosak_factory run --only cat30 --formats audio --live-status
+```
+
+This is **code/status only** — it never commits generated audio or video
+(those stay gitignored; upload finished episodes to wherever your team
+actually distributes them, e.g. a shared Drive folder). Opt-in and off by
+default. A push failure (offline, remote ahead, no git repo at all) logs a
+warning and never interrupts the actual run — producing episodes always
+takes priority over the status file staying current.
+
 ## Adding a new lesson file
 
 Drop a new category Markdown file into `input/` (same format as the two

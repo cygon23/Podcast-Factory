@@ -23,6 +23,7 @@ from dorosak_factory.parser.markdown_parser import parse_category_file
 from dorosak_factory.parser.models import Category
 from dorosak_factory.pipeline import estimate_characters, process_lesson, record_result
 from dorosak_factory.report.run_report import LessonOutcome, RunReport
+from dorosak_factory.report.status_sync import render_status_markdown, write_and_push_status
 from dorosak_factory.tts.registry import EngineResolutionError, resolve_engine_class
 
 
@@ -72,6 +73,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--only", default=None, help='One lesson ("cat31:5") or category ("cat31")')
     run_parser.add_argument("--formats", choices=["audio", "video", "both"], default="both")
     run_parser.add_argument("--dry-run", action="store_true", help="Print the plan; synthesize nothing")
+    run_parser.add_argument(
+        "--live-status",
+        action="store_true",
+        help="After each lesson, commit+push a STATUS.md progress file to git (code/status only, never audio/video)",
+    )
 
     subparsers.add_parser("status", help="Show manifest summary")
 
@@ -161,7 +167,17 @@ def _cmd_run(args: argparse.Namespace, config: Config) -> int:
             return 0
 
         exit_code, report_text = _execute_run(
-            plan, to_process, categories, engine_cls, engine_name, config, manifest, args.formats
+            plan,
+            to_process,
+            categories,
+            engine_cls,
+            engine_name,
+            config,
+            manifest,
+            args.formats,
+            live_status=args.live_status,
+            base_dir=args.base_dir,
+            only_category=only_category,
         )
         _append_run_log(log_path, report_text)
         return exit_code
@@ -187,7 +203,17 @@ def _print_dry_run(plan, to_process, engine_name: str, config: Config, log_path:
 
 
 def _execute_run(
-    plan, to_process, categories, engine_cls, engine_name, config, manifest, formats
+    plan,
+    to_process,
+    categories,
+    engine_cls,
+    engine_name,
+    config,
+    manifest,
+    formats,
+    live_status: bool = False,
+    base_dir: Path | None = None,
+    only_category: int | None = None,
 ) -> tuple[int, str]:
     engine = engine_cls.from_config(config)
     cache = LineCache(cache_dir=config.audio.cache_dir)
@@ -199,6 +225,28 @@ def _execute_run(
     for item in plan:
         if not item.needs_processing:
             report.outcomes.append(LessonOutcome(item.category_number, item.lesson.number, "skipped"))
+
+    status_repo_dir = Path(base_dir) if base_dir is not None else Path(".")
+    status_path = status_repo_dir / "STATUS.md"
+    if only_category is not None and only_category in categories_by_number:
+        status_category_number = only_category
+        status_category_title = categories_by_number[only_category].title_en
+    else:
+        status_category_number = 0
+        status_category_title = "All categories"
+
+    def push_status(last_completed: str | None) -> None:
+        if not live_status:
+            return
+        content = render_status_markdown(
+            category_number=status_category_number,
+            category_title=status_category_title,
+            engine_name=engine_name,
+            total_lessons=len(plan),
+            report=report,
+            last_completed=last_completed,
+        )
+        write_and_push_status(status_repo_dir, status_path, content)
 
     def run_one(item):
         category = categories_by_number[item.category_number]
@@ -222,6 +270,9 @@ def _execute_run(
                     characters_synthesized=result.characters_synthesized,
                     failure_reason=result.failure_reason,
                 )
+            )
+            push_status(
+                f"cat{item.category_number}:{item.lesson.number} — {item.lesson.title_en} ({status})"
             )
 
     report.wall_time_seconds = time.monotonic() - start_time
