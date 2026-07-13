@@ -52,18 +52,21 @@ the same identity-consistency principle as the voice map.
 ### Stage 2 — lip-sync animation (runs per lesson, per line)
 
 Takes the Stage 1 portrait + the episode's synthesized audio and produces
-a talking-head video clip.
+a talking-head video clip. **Important distinction**: we only have a
+*photo* + *audio* (no filmed performance to copy expressions from), so the
+model must be **audio-driven**, not video-driven.
 
-| Model | Org | Notes |
-|---|---|---|
-| **LivePortrait** ⭐ | Kuaishou | Fastest of the group, strong identity preservation, actively maintained. Top pick. |
-| **MuseTalk** ⭐ | Tencent | Real-time-capable, good lip-sync accuracy. Top pick. |
-| LatentSync | ByteDance | Newer, higher quality, heavier compute. |
-| SadTalker | — | Older, well-documented, lighter weight — good fallback. |
-| Wav2Lip | — | Lightest weight, lowest quality — last resort. |
+| Model | Org | Driven by | Notes |
+|---|---|---|---|
+| **SadTalker** ⭐ | — | audio + 1 photo | Purpose-built for exactly our case. Well-documented, moderate GPU need, plenty of ready-made Colab/Kaggle notebooks. **Top pick for the first test.** |
+| **MuseTalk** ⭐ | Tencent | audio + 1 photo/video | Sharper lip-sync than SadTalker, heavier setup (face parsing + Whisper features). Upgrade path once SadTalker is validated. |
+| LatentSync | ByteDance | audio + reference video | Highest quality, but wants a reference video, not just a photo — better suited to a later stage. |
+| Wav2Lip | — | audio + 1 photo/video | Lightest weight, mouth-region-only, noticeably lower quality — fallback only. |
+| ~~LivePortrait~~ | Kuaishou | **driving video** (not audio) | Re-targets an existing *filmed* expression/pose onto a photo. Not usable here directly since we have no driving footage — worth revisiting only if we ever record a real performance to retarget. |
 
-All five are open-weight and run fully local (no API key, no network
-call at render time) — satisfying "it has to be a local model."
+SadTalker, MuseTalk, Wav2Lip and LatentSync are all open-weight and run
+fully local (no API key, no network call at render time) — satisfying
+"it has to be a local model."
 
 ### Why this isn't built yet
 
@@ -77,6 +80,109 @@ implementations" rule — so the architecture is ready, the model choice is
 researched and documented, but the adapter itself waits for GPU access
 (cloud GPU rental, e.g. a single RunPod/Lambda A10 session for batch
 rendering, is the cheapest unblock — no local hardware purchase needed).
+
+## One-time free-GPU test procedure (before any code changes)
+
+Goal: produce **one** avatar clip good enough to judge — not integrated
+into the pipeline yet, just a raw MP4 to eyeball. Uses Kaggle Notebooks'
+free GPU quota (30 GPU-hours/week, P100 or T4×2, 16GB VRAM) — no payment,
+no local hardware.
+
+### 1. Accounts (5 min)
+
+1. Kaggle account at kaggle.com, then **Settings → Phone Verification**
+   (required before Kaggle will grant GPU + internet access to notebooks).
+2. Hugging Face account at huggingface.co, then **Settings → Access
+   Tokens → New token** (role: "Read"). Copy it somewhere safe.
+3. To avoid a licensing wait: use **FLUX.1-schnell**
+   (`black-forest-labs/FLUX.1-schnell`) instead of FLUX.1-dev for this
+   test — it's Apache-2.0, no gated-repo approval needed, and only needs
+   ~4 inference steps (fast on a free GPU). Swap to `FLUX.1-dev` later if
+   its extra quality is worth the approval wait (usually granted within
+   minutes on the model's Hugging Face page, "Agree and access
+   repository").
+
+### 2. Kaggle notebook setup (5 min)
+
+1. kaggle.com → **Create → New Notebook**.
+2. Right sidebar → **Settings → Accelerator → GPU T4 x2** (or P100 if
+   offered).
+3. Same sidebar → toggle **Internet: On** (needed for `pip install` and
+   downloading model weights).
+4. **Add-ons → Secrets → Add a new secret**: name it `HF_TOKEN`, paste
+   your Hugging Face token. (Keeps it out of the notebook's plaintext,
+   important since Kaggle notebooks are easy to accidentally make public.)
+
+### 3. Generate one avatar portrait (~2 min run time)
+
+```python
+!pip install -q diffusers transformers accelerate safetensors sentencepiece huggingface_hub
+
+from huggingface_hub import login
+from kaggle_secrets import UserSecretsClient
+login(UserSecretsClient().get_secret("HF_TOKEN"))
+
+import torch
+from diffusers import FluxPipeline
+
+pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16)
+pipe.enable_model_cpu_offload()  # keeps it inside 16GB VRAM
+
+image = pipe(
+    prompt=(
+        "photorealistic portrait of a friendly professional podcast host, "
+        "sitting in a modern studio, soft studio lighting, looking directly "
+        "at camera, neutral expression, mouth closed, shoulders visible, "
+        "high detail, 4k"
+    ),
+    num_inference_steps=4,
+    guidance_scale=0.0,
+).images[0]
+image.save("/kaggle/working/host_avatar.png")
+```
+
+Download `host_avatar.png` from the notebook's file browser (or commit
+the notebook so it appears under "Output").
+
+### 4. Animate it with real episode audio (~10-15 min setup, GPU-fast run)
+
+1. Upload one real dialogue line's audio as a Kaggle **Dataset** (simplest
+   path: zip a short WAV — e.g. one line already synthesized locally by
+   Kokoro — and upload it via **Add Data → Upload**), or just re-run the
+   existing local pipeline for one lesson and grab `episode.mp3`/one
+   cached line WAV from `output/cat30/lesson1/`.
+2. In the same (or a new) Kaggle notebook:
+   ```
+   !git clone https://github.com/OpenTalker/SadTalker
+   %cd SadTalker
+   !pip install -q -r requirements.txt
+   !bash scripts/download_models.sh
+   ```
+3. Run inference:
+   ```
+   !python inference.py \
+     --driven_audio /kaggle/input/<your-dataset>/sample_line.wav \
+     --source_image /kaggle/working/host_avatar.png \
+     --result_dir /kaggle/working/result \
+     --still --preprocess full --enhancer gfpgan
+   ```
+   (`--enhancer gfpgan` face-restores/sharpens the output — worth the
+   extra runtime for a quality test.)
+4. Download the resulting MP4 from `/kaggle/working/result/`.
+
+### 5. Judge it
+
+Watch the raw clip against `input/demo.mp4`'s bar. If it holds up:
+promote SadTalker to a real `local_avatar_renderer.py` adapter (see next
+section) and repeat the same two steps for the other 5 voice roles'
+portraits. If lip-sync quality isn't sharp enough, try MuseTalk next with
+the same portrait — no need to redo Stage 1.
+
+Kaggle notebooks disconnect after ~20 min idle and cap sessions at 12
+hours — for a single test this is a non-issue, just don't leave it idle
+mid-run. Google Colab's free tier is a viable alternative (T4, similar
+setup) if you prefer that UI, but its GPU availability is less
+predictable and idle-disconnects are stricter.
 
 ## Adding `local_avatar_renderer.py` once GPU access exists
 
