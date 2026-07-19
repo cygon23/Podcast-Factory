@@ -19,6 +19,19 @@ import dorosak_factory.tts.engines  # noqa: F401 - import side-effect registers 
 import dorosak_factory.video.renderers  # noqa: F401 - import side-effect registers built-in renderers
 from dorosak_factory.audio.cache import LineCache
 from dorosak_factory.config import Config, load_config
+from dorosak_factory.course.assembly import (
+    assemble_article_lesson,
+    assemble_dialogue_lesson,
+    synthesize_bilingual_item,
+)
+from dorosak_factory.course.course_manifest import CourseItemRecord, CourseManifest
+from dorosak_factory.course.csv_parser import (
+    parse_articles_csv,
+    parse_dialogues_csv,
+    parse_examples_csv,
+    parse_useful_phrases_csv,
+    parse_vocabulary_csv,
+)
 from dorosak_factory.manifest.store import Manifest
 from dorosak_factory.parser.markdown_parser import parse_category_file
 from dorosak_factory.parser.models import Category
@@ -90,6 +103,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("cost-report", help="Show characters synthesized and estimated cost by engine")
 
+    course_parser = subparsers.add_parser("course-run", help="Process the course CSV audio pipeline")
+    course_parser.add_argument(
+        "--content",
+        choices=["dialogues", "examples", "vocabulary", "useful_phrases", "articles", "all"],
+        default="all",
+    )
+    course_parser.add_argument(
+        "--english-engine", default=None, help="Override auto-detected English engine"
+    )
+    course_parser.add_argument("--arabic-engine", default="piper", help="Arabic TTS engine name")
+    course_parser.add_argument("--only-lesson", type=int, default=None, help="Scope to one lesson_id")
+    course_parser.add_argument("--dry-run", action="store_true")
+    course_parser.add_argument("--force", action="store_true")
+
     return parser
 
 
@@ -114,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_validate(config)
     if args.command == "cost-report":
         return _cmd_cost_report(config)
+    if args.command == "course-run":
+        return _cmd_course_run(args, config)
     parser.error(f"Unknown command: {args.command}")
     return 2  # pragma: no cover - argparse exits before this
 
@@ -368,3 +397,270 @@ def _cmd_cost_report(config: Config) -> int:
         return 0
     finally:
         manifest.close()
+
+
+_CONTENT_FILENAMES = {
+    "dialogues": "dialogues.csv",
+    "examples": "examples.csv",
+    "vocabulary": "vocabulary.csv",
+    "useful_phrases": "useful_phrases.csv",
+    "articles": "articles.csv",
+}
+
+
+def _cmd_course_run(args: argparse.Namespace, config: Config) -> int:
+    content_types = list(_CONTENT_FILENAMES) if args.content == "all" else [args.content]
+
+    english_engine_name = args.english_engine or config.tts.engine
+    try:
+        english_engine_cls = resolve_engine_class(explicit=english_engine_name)
+    except EngineResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    english_engine = english_engine_cls.from_config(config)
+
+    try:
+        arabic_engine_cls = resolve_engine_class(explicit=args.arabic_engine)
+    except EngineResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    arabic_engine = arabic_engine_cls.from_config(config)
+
+    cache = LineCache(cache_dir=config.audio.cache_dir)
+    course_manifest = CourseManifest(db_path=config.manifest.db_path)
+    try:
+        plan_lines: list[str] = []
+        produced = 0
+        for content_type in content_types:
+            csv_path = config.course.csv_dir / _CONTENT_FILENAMES[content_type]
+            if not csv_path.exists():
+                print(f"COURSE CSV NOT FOUND: {csv_path}", file=sys.stderr)
+                continue
+            produced += _process_content_type(
+                content_type, csv_path, args, config, english_engine, arabic_engine,
+                cache, course_manifest, plan_lines,
+            )
+
+        if args.dry_run:
+            print("\n".join(plan_lines) if plan_lines else "Nothing to process.")
+            return 0
+
+        print(f"Course run complete: {produced} item(s) produced.")
+        return 0
+    finally:
+        course_manifest.close()
+
+
+def _process_content_type(
+    content_type, csv_path, args, config, english_engine, arabic_engine, cache, course_manifest, plan_lines
+) -> int:
+    produced = 0
+    if content_type == "dialogues":
+        for section in parse_dialogues_csv(csv_path):
+            if args.only_lesson is not None and section.lesson.lesson_id != args.only_lesson:
+                continue
+            produced += _run_dialogue_section(
+                section, args, config, english_engine, cache, course_manifest, plan_lines
+            )
+    elif content_type in ("examples", "vocabulary"):
+        parse_fn = parse_examples_csv if content_type == "examples" else parse_vocabulary_csv
+        for section in parse_fn(csv_path):
+            if args.only_lesson is not None and section.lesson.lesson_id != args.only_lesson:
+                continue
+            for item in section.items:
+                produced += _run_bilingual_item(
+                    content_type, section, item, args, config, english_engine, arabic_engine,
+                    cache, course_manifest, plan_lines,
+                )
+    elif content_type == "useful_phrases":
+        for section in parse_useful_phrases_csv(csv_path):
+            if args.only_lesson is not None and section.lesson.lesson_id != args.only_lesson:
+                continue
+            for item in section.items:
+                produced += _run_phrase_item(
+                    section, item, args, config, english_engine, cache, course_manifest, plan_lines
+                )
+    elif content_type == "articles":
+        for section in parse_articles_csv(csv_path):
+            if args.only_lesson is not None and section.lesson.lesson_id != args.only_lesson:
+                continue
+            produced += _run_article_section(
+                section, args, config, english_engine, cache, course_manifest, plan_lines
+            )
+    return produced
+
+
+def _lesson_dir(config: Config, section) -> Path:
+    book_slug = section.book.name.lower().replace(" ", "_").replace("(", "").replace(")", "")
+    return (
+        config.course.output_dir
+        / book_slug
+        / f"unit{section.unit.unit_id}"
+        / f"lesson{section.lesson.lesson_id}"
+    )
+
+
+def _run_dialogue_section(section, args, config, english_engine, cache, course_manifest, plan_lines) -> int:
+    section_key = str(section.lesson.lesson_id)
+    if not args.dry_run and not course_manifest.needs_processing(
+        "dialogues", section_key, 0, force=args.force
+    ):
+        return 0
+    plan_lines.append(f"dialogues lesson {section.lesson.lesson_id}: {section.lesson.name}")
+    if args.dry_run:
+        return 0
+
+    output_path = _lesson_dir(config, section) / "dialogue" / "episode.mp3"
+    work_dir = config.audio.work_dir / f"course_dialogue_{section.lesson.lesson_id}"
+    student_role = config.course.student_voice_by_book.get(section.book.name, "female_1")
+    try:
+        assemble_dialogue_lesson(
+            section, teacher_engine=english_engine, student_engine=english_engine, cache=cache,
+            audio_config=config.audio, output_mp3_path=output_path, work_dir=work_dir,
+            teacher_voice_role=config.course.teacher_voice_role, student_voice_role=student_role,
+        )
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="dialogues", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=0,
+                output_path=str(output_path), status="success", failure_reason=None,
+            )
+        )
+        return 1
+    except Exception as exc:  # noqa: BLE001 - one lesson's failure must never crash the run
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="dialogues", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=0,
+                output_path=None, status="failed", failure_reason=str(exc),
+            )
+        )
+        return 0
+
+
+def _run_bilingual_item(
+    content_type, section, item, args, config, english_engine, arabic_engine, cache, course_manifest, plan_lines
+) -> int:
+    section_key = str(section.lesson.lesson_id)
+    if not args.dry_run and not course_manifest.needs_processing(
+        content_type, section_key, item.item_no, force=args.force
+    ):
+        return 0
+    plan_lines.append(f"{content_type} lesson {section.lesson.lesson_id} item {item.item_no}: {item.english}")
+    if args.dry_run:
+        return 0
+
+    slug = item.english.lower().replace(" ", "_")[:40]
+    output_path = _lesson_dir(config, section) / content_type / f"{item.item_no}_{slug}.mp3"
+    work_dir = config.audio.work_dir / f"course_{content_type}_{section.lesson.lesson_id}"
+    try:
+        synthesize_bilingual_item(
+            item, english_engine=english_engine, arabic_engine=arabic_engine, cache=cache,
+            audio_config=config.audio, course_config=config.course, output_mp3_path=output_path,
+            work_dir=work_dir, narrator_voice_role=config.course.narrator_voice_role,
+        )
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source=content_type, book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=item.item_no,
+                output_path=str(output_path), status="success", failure_reason=None,
+            )
+        )
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source=content_type, book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=item.item_no,
+                output_path=None, status="failed", failure_reason=str(exc),
+            )
+        )
+        return 0
+
+
+def _run_phrase_item(section, item, args, config, english_engine, cache, course_manifest, plan_lines) -> int:
+    section_key = str(section.lesson.lesson_id)
+    if not args.dry_run and not course_manifest.needs_processing(
+        "useful_phrases", section_key, item.item_no, force=args.force
+    ):
+        return 0
+    plan_lines.append(f"useful_phrases lesson {section.lesson.lesson_id} item {item.item_no}: {item.text}")
+    if args.dry_run:
+        return 0
+
+    output_path = _lesson_dir(config, section) / "useful_phrases" / f"{item.item_no}.mp3"
+    work_dir = config.audio.work_dir / f"course_phrases_{section.lesson.lesson_id}"
+    try:
+        result = cache.get_or_synthesize(
+            english_engine, item.text, voice_role=config.course.narrator_voice_role,
+            model="default", voice_id=config.course.narrator_voice_role,
+        )
+        from dorosak_factory.audio.loudness import normalize_loudness
+        from dorosak_factory.audio.mp3_export import ID3Tags, export_mp3
+
+        work_dir.mkdir(parents=True, exist_ok=True)
+        normalized_path = work_dir / f"normalized_{item.item_no}.wav"
+        normalize_loudness(
+            result.wav_path, normalized_path,
+            target_lufs=config.audio.loudness.target_lufs, target_tp=config.audio.loudness.true_peak_dbtp,
+        )
+        tags = ID3Tags(
+            title=item.text, artist=config.audio.mp3.artist, album="Dorosak Course Audio",
+            track_number=item.item_no,
+        )
+        export_mp3(normalized_path, output_path, bitrate_kbps=config.audio.mp3.bitrate_kbps, tags=tags)
+
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="useful_phrases", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=item.item_no,
+                output_path=str(output_path), status="success", failure_reason=None,
+            )
+        )
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="useful_phrases", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=item.item_no,
+                output_path=None, status="failed", failure_reason=str(exc),
+            )
+        )
+        return 0
+
+
+def _run_article_section(section, args, config, english_engine, cache, course_manifest, plan_lines) -> int:
+    section_key = str(section.lesson.lesson_id)
+    if not args.dry_run and not course_manifest.needs_processing(
+        "articles", section_key, 0, force=args.force
+    ):
+        return 0
+    plan_lines.append(f"articles lesson {section.lesson.lesson_id}: {section.lesson.name}")
+    if args.dry_run:
+        return 0
+
+    output_path = _lesson_dir(config, section) / "article" / "narration.mp3"
+    work_dir = config.audio.work_dir / f"course_article_{section.lesson.lesson_id}"
+    try:
+        assemble_article_lesson(
+            section, narrator_engine=english_engine, cache=cache, audio_config=config.audio,
+            output_mp3_path=output_path, work_dir=work_dir,
+            narrator_voice_role=config.course.narrator_voice_role,
+        )
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="articles", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=0,
+                output_path=str(output_path), status="success", failure_reason=None,
+            )
+        )
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        course_manifest.upsert_record(
+            CourseItemRecord(
+                csv_source="articles", book_id=section.book.book_id, unit_id=section.unit.unit_id,
+                lesson_id=section.lesson.lesson_id, section_id=section_key, item_no=0,
+                output_path=None, status="failed", failure_reason=str(exc),
+            )
+        )
+        return 0
