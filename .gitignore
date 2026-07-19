@@ -29,3 +29,7 @@ new_inputs/
 
 # OS/editor cruft
 .DS_Store
+
+# Course CSV audio pipeline (see docs/superpowers/specs/2026-07-19-course-audio-pipeline-design.md)
+input/course_csv/
+output/course/
