@@ -48,3 +48,39 @@ def test_synthesize_bilingual_item_produces_one_mp3_with_a_silence_gap(tmp_path)
     # duration slightly, so this checks the gap was really inserted rather
     # than asserting an exact value).
     assert combined_duration >= english_only_duration + arabic_only_duration + 0.9
+
+
+def test_assemble_dialogue_lesson_produces_one_multi_voice_mp3(tmp_path):
+    from dorosak_factory.course.assembly import assemble_dialogue_lesson
+    from dorosak_factory.course.models import Book, CourseLesson, DialogueLine, DialogueSection, Unit
+
+    audio_config = AudioConfig(cache_dir=tmp_path / "cache", work_dir=tmp_path / "work")
+    cache = LineCache(cache_dir=audio_config.cache_dir)
+    teacher_engine = NullEngine(output_dir=tmp_path / "teacher_raw")
+    student_engine = NullEngine(output_dir=tmp_path / "student_raw")
+
+    section = DialogueSection(
+        book=Book(book_id=1, name="Mastering English with Dorosak (Beginner)"),
+        unit=Unit(unit_id=6, book_id=1, name="Unit 1"),
+        lesson=CourseLesson(lesson_id=20, unit_id=6, book_id=1, name="Lesson 1: Alphabet Basics"),
+        lines=(
+            DialogueLine(item_no=1, speaker="Teacher", text="Welcome to today's class."),
+            DialogueLine(item_no=2, speaker="Student", text="Hello, teacher."),
+        ),
+    )
+    output_path = tmp_path / "dialogue.mp3"
+
+    assemble_dialogue_lesson(
+        section,
+        teacher_engine=teacher_engine,
+        student_engine=student_engine,
+        cache=cache,
+        audio_config=audio_config,
+        output_mp3_path=output_path,
+        work_dir=tmp_path / "dialogue_work",
+        teacher_voice_role="host",
+        student_voice_role="female_1",
+    )
+
+    assert output_path.exists()
+    assert probe_duration_seconds(output_path) > 0.5
