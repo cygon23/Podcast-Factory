@@ -18,6 +18,8 @@ import csv
 from pathlib import Path
 
 from dorosak_factory.course.models import (
+    BilingualItem,
+    BilingualSection,
     Book,
     CourseLesson,
     DialogueLine,
@@ -71,3 +73,44 @@ def parse_dialogues_csv(path: Path) -> list[DialogueSection]:
 def _parse_dialogue_line(row: dict[str, str]) -> DialogueLine:
     speaker, _, text = row["item_text"].partition(":")
     return DialogueLine(item_no=int(row["item_no"]), speaker=speaker.strip(), text=text.strip())
+
+
+def split_bilingual_dash(text: str) -> tuple[str, str]:
+    """Splits "English sentence — Arabic translation" on the em-dash separator."""
+    english, _, arabic = text.partition(" — ")
+    return english.strip(), arabic.strip()
+
+
+def split_bilingual_tab(text: str) -> tuple[str, str]:
+    """Splits "English word\\tArabic translation" on the tab separator."""
+    english, _, arabic = text.partition("\t")
+    return english.strip(), arabic.strip()
+
+
+def _parse_bilingual_csv(path: Path, split_fn) -> list[BilingualSection]:
+    rows = _read_rows(path)
+    sections: list[BilingualSection] = []
+    for section_rows in _group_by_section(rows).values():
+        kept_rows = [r for r in section_rows if not _has_existing_audio(r)]
+        if not kept_rows:
+            continue
+        book, unit, lesson = _book_unit_lesson(kept_rows[0])
+        ordered = sorted(kept_rows, key=lambda r: int(r["item_no"]))
+        items = tuple(_parse_bilingual_item(r, split_fn) for r in ordered)
+        sections.append(BilingualSection(book=book, unit=unit, lesson=lesson, items=items))
+    return sections
+
+
+def _parse_bilingual_item(row: dict[str, str], split_fn) -> BilingualItem:
+    english, arabic = split_fn(row["item_text"])
+    return BilingualItem(item_no=int(row["item_no"]), english=english, arabic=arabic)
+
+
+def parse_examples_csv(path: Path) -> list[BilingualSection]:
+    """Parses examples.csv: "English — Arabic" sentence pairs, grouped per lesson."""
+    return _parse_bilingual_csv(path, split_bilingual_dash)
+
+
+def parse_vocabulary_csv(path: Path) -> list[BilingualSection]:
+    """Parses vocabulary.csv: "English\\tArabic" word pairs, grouped per lesson."""
+    return _parse_bilingual_csv(path, split_bilingual_tab)
