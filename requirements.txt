@@ -16,5 +16,10 @@ elevenlabs>=1.0
 # kokoro; the operator downloads the model separately (see OPERATOR_TODO.md).
 # kokoro>=0.9
 
+# Local Arabic TTS for the course audio pipeline (--arabic-engine piper).
+# Lightweight (onnxruntime, no torch). Voice model downloaded separately
+# (see docs/superpowers/specs/2026-07-19-course-audio-pipeline-design.md).
+piper-tts>=1.5
+
 # Testing
 pytest>=8.0

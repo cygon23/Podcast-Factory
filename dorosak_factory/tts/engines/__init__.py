@@ -11,6 +11,7 @@ from dorosak_factory.tts.engines.google_engine import GoogleEngine
 from dorosak_factory.tts.engines.kokoro_engine import KokoroEngine
 from dorosak_factory.tts.engines.null_engine import NullEngine
 from dorosak_factory.tts.engines.openai_engine import OpenAIEngine
+from dorosak_factory.tts.engines.piper_engine import PiperEngine
 from dorosak_factory.tts.engines.polly_engine import PollyEngine
 from dorosak_factory.tts.registry import default_registry
 
@@ -21,6 +22,7 @@ default_registry.register(OpenAIEngine)
 default_registry.register(GoogleEngine)
 default_registry.register(PollyEngine)
 default_registry.register(ElevenLabsEngine)
+default_registry.register(PiperEngine)
 
 __all__ = [
     "NullEngine",
@@ -30,4 +32,5 @@ __all__ = [
     "GoogleEngine",
     "PollyEngine",
     "ElevenLabsEngine",
+    "PiperEngine",
 ]
