@@ -17,7 +17,7 @@ from dorosak_factory.audio.loudness import normalize_loudness
 from dorosak_factory.audio.mp3_export import ID3Tags, export_mp3
 from dorosak_factory.audio.wav_utils import concat_wavs, write_silence_wav
 from dorosak_factory.config import AudioConfig, CourseConfig
-from dorosak_factory.course.models import BilingualItem, DialogueSection
+from dorosak_factory.course.models import ArticleSection, BilingualItem, DialogueSection
 from dorosak_factory.tts.base import TTSEngine
 
 
@@ -73,6 +73,43 @@ def synthesize_bilingual_item(
         artist=audio_config.mp3.artist,
         album="Dorosak Course Audio",
         track_number=item.item_no,
+    )
+    export_mp3(normalized_path, output_mp3_path, bitrate_kbps=audio_config.mp3.bitrate_kbps, tags=tags)
+    return output_mp3_path
+
+
+def assemble_article_lesson(
+    section: ArticleSection,
+    narrator_engine: TTSEngine,
+    cache: LineCache,
+    audio_config: AudioConfig,
+    output_mp3_path: Path,
+    work_dir: Path,
+    narrator_voice_role: str,
+) -> Path:
+    """One narrated MP3 reading an article's full passage."""
+    work_dir.mkdir(parents=True, exist_ok=True)
+    result = cache.get_or_synthesize(
+        narrator_engine,
+        section.text,
+        voice_role=narrator_voice_role,
+        model="default",
+        voice_id=narrator_voice_role,
+    )
+
+    normalized_path = work_dir / "normalized.wav"
+    normalize_loudness(
+        result.wav_path,
+        normalized_path,
+        target_lufs=audio_config.loudness.target_lufs,
+        target_tp=audio_config.loudness.true_peak_dbtp,
+    )
+
+    tags = ID3Tags(
+        title=f"{section.lesson.name} - Article",
+        artist=audio_config.mp3.artist,
+        album=section.book.name,
+        track_number=section.lesson.lesson_id,
     )
     export_mp3(normalized_path, output_mp3_path, bitrate_kbps=audio_config.mp3.bitrate_kbps, tags=tags)
     return output_mp3_path

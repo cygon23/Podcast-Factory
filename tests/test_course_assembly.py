@@ -84,3 +84,33 @@ def test_assemble_dialogue_lesson_produces_one_multi_voice_mp3(tmp_path):
 
     assert output_path.exists()
     assert probe_duration_seconds(output_path) > 0.5
+
+
+def test_assemble_article_lesson_produces_one_narrated_mp3(tmp_path):
+    from dorosak_factory.course.assembly import assemble_article_lesson
+    from dorosak_factory.course.models import ArticleSection, Book, CourseLesson, Unit
+
+    audio_config = AudioConfig(cache_dir=tmp_path / "cache", work_dir=tmp_path / "work")
+    cache = LineCache(cache_dir=audio_config.cache_dir)
+    narrator_engine = NullEngine(output_dir=tmp_path / "narrator_raw")
+
+    section = ArticleSection(
+        book=Book(book_id=1, name="Mastering English with Dorosak (Beginner)"),
+        unit=Unit(unit_id=6, book_id=1, name="Unit 1"),
+        lesson=CourseLesson(lesson_id=20, unit_id=6, book_id=1, name="Lesson 1: Alphabet Basics"),
+        text="The English alphabet is the foundation of the language.",
+    )
+    output_path = tmp_path / "article.mp3"
+
+    assemble_article_lesson(
+        section,
+        narrator_engine=narrator_engine,
+        cache=cache,
+        audio_config=audio_config,
+        output_mp3_path=output_path,
+        work_dir=tmp_path / "article_work",
+        narrator_voice_role="host",
+    )
+
+    assert output_path.exists()
+    assert probe_duration_seconds(output_path) > 0.1
