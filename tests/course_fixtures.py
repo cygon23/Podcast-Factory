@@ -4,6 +4,9 @@ arguments, so tests never hand-count commas in raw CSV text.
 
 from __future__ import annotations
 
+import csv
+import io
+
 CSV_HEADER = (
     "book_id,book_name,unit_id,unit_name,unit_sort,lesson_id,lesson_name,lesson_sort,"
     "page_id,page_title,page_index,page_sort,section_id,section_title,section_type,"
@@ -52,8 +55,8 @@ def csv_row(
 ) -> str:
     """Returns one CSV data row (no trailing newline) matching CSV_HEADER's column order.
 
-    No field used across this test suite contains a comma, so plain
-    comma-joining is safe - no CSV quoting/escaping needed.
+    Uses csv.writer for proper quoting, so fields containing commas (real
+    dialogue text often does, e.g. "Hello, teacher.") round-trip correctly.
     """
     fields = [
         book_id, book_name, unit_id, unit_name, unit_sort, lesson_id, lesson_name,
@@ -64,4 +67,7 @@ def csv_row(
         reference_text, quiz_id, page_created_at, page_updated_at,
         section_created_at, section_updated_at, content_missing,
     ]
-    return ",".join(str(f) for f in fields)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="")
+    writer.writerow([str(f) for f in fields])
+    return buffer.getvalue()
