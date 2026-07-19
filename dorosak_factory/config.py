@@ -103,12 +103,38 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
+class CourseConfig:
+    """Course CSV audio pipeline settings - additive, separate from the
+    cat*/Markdown pipeline's config sections above. See
+    docs/superpowers/specs/2026-07-19-course-audio-pipeline-design.md."""
+
+    csv_dir: Path = Path("input/course_csv")
+    output_dir: Path = Path("output/course")
+    teacher_voice_role: str = "host"
+    narrator_voice_role: str = "host"
+    arabic_voice_role: str = "arabic_narrator"
+    bilingual_gap_ms: int = 1000
+    # Real book_name strings from the CSV export have irregular spacing
+    # (extra/missing spaces around parentheses) - keys must match exactly,
+    # do not "clean up" this spacing.
+    student_voice_by_book: dict[str, str] = field(
+        default_factory=lambda: {
+            "Mastering English with Dorosak (Beginner)": "female_1",
+            "Mastering English with Dorosak (Elementary)": "male_1",
+            "Mastering English with Dorosak ( intermediate)": "female_2",
+            "Mastering English with Dorosak  (Advanced)": "male_2",
+        }
+    )
+
+
+@dataclass(frozen=True)
 class Config:
     audio: AudioConfig = field(default_factory=AudioConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     video: VideoConfig = field(default_factory=VideoConfig)
     manifest: ManifestConfig = field(default_factory=ManifestConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    course: CourseConfig = field(default_factory=CourseConfig)
 
 
 def load_config(path: str | Path | None, base_dir: str | Path) -> Config:
@@ -178,7 +204,14 @@ def load_config(path: str | Path | None, base_dir: str | Path) -> Config:
         pipeline_raw["concurrency"] = min(4, os.cpu_count() or 1)
     pipeline = PipelineConfig(**pipeline_raw)
 
-    return Config(audio=audio, tts=tts, video=video, manifest=manifest, pipeline=pipeline)
+    course_raw = dict(raw.get("course", {}))
+    course_raw["csv_dir"] = _resolve_path(course_raw.get("csv_dir", "input/course_csv"), base_dir)
+    course_raw["output_dir"] = _resolve_path(course_raw.get("output_dir", "output/course"), base_dir)
+    course = CourseConfig(**course_raw)
+
+    return Config(
+        audio=audio, tts=tts, video=video, manifest=manifest, pipeline=pipeline, course=course
+    )
 
 
 def _resolve_path(value: str | Path, base_dir: Path) -> Path:

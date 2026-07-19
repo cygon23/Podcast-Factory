@@ -69,3 +69,20 @@ def test_missing_config_file_raises_clear_error(tmp_path):
     missing = tmp_path / "does_not_exist.yaml"
     with pytest.raises(FileNotFoundError, match="does_not_exist.yaml"):
         load_config(missing, base_dir=tmp_path)
+
+
+def test_default_config_includes_course_section_with_expected_defaults():
+    from dorosak_factory.config import Config
+
+    config = Config()
+    assert config.course.teacher_voice_role == "host"
+    assert config.course.narrator_voice_role == "host"
+    assert config.course.arabic_voice_role == "arabic_narrator"
+    assert config.course.bilingual_gap_ms == 1000
+    assert config.course.student_voice_by_book["Mastering English with Dorosak (Beginner)"] == "female_1"
+
+
+def test_load_config_resolves_course_paths_against_base_dir(tmp_path):
+    config = load_config(path=None, base_dir=tmp_path)
+    assert config.course.csv_dir == tmp_path / "input" / "course_csv"
+    assert config.course.output_dir == tmp_path / "output" / "course"
