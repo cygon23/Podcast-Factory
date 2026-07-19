@@ -23,6 +23,9 @@ __pycache__/
 # Staging area for incoming category files / review media not yet
 # merged into input/ (see docs/README.md "Adding a new lesson file")
 new_inputs/
+# A second, separate staging folder (note: hyphenated, inside input/) that
+# the original "new_inputs/" pattern above never actually matched.
+input/new-input/
 
 # Editor/tool local state
 .claude/
@@ -33,3 +36,15 @@ new_inputs/
 # Course CSV audio pipeline (see docs/superpowers/specs/2026-07-19-course-audio-pipeline-design.md)
 input/course_csv/
 output/course/
+
+# Avatar-model research scratch (Kaggle/Colab/local experiments, see
+# docs/VIDEO_RENDERER_ROADMAP.md) - one-off artifacts, not part of the pipeline
+.venv-avatar/
+SadTalker/
+generate_avatar.py
+host_avatar.png
+sample_line.mp3
+input/demo.mp4
+
+# Generated deliverable zips shared with the team, not project source
+*.zip
