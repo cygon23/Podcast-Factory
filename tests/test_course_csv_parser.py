@@ -129,3 +129,55 @@ def test_parse_vocabulary_csv_skips_only_items_with_existing_audio(tmp_path):
     assert len(sections) == 1
     assert len(sections[0].items) == 1
     assert sections[0].items[0].english == "Letter"
+
+
+def test_parse_useful_phrases_csv_keeps_plain_text_items(tmp_path):
+    from dorosak_factory.course.csv_parser import parse_useful_phrases_csv
+
+    rows = [
+        csv_row(section_id="76", item_no=1, item_text="This is a letter."),
+        csv_row(section_id="76", item_no=2, item_text="These are letters."),
+    ]
+    path = _write_csv(tmp_path, "useful_phrases.csv", rows)
+
+    sections = parse_useful_phrases_csv(path)
+
+    assert len(sections[0].items) == 2
+    assert sections[0].items[0].text == "This is a letter."
+
+
+def test_parse_articles_csv_uses_content_text_not_item_text(tmp_path):
+    from dorosak_factory.course.csv_parser import parse_articles_csv
+
+    rows = [
+        csv_row(
+            section_id="78",
+            item_no=1,
+            item_text="Article (Alphabet Basics)",
+            content_text="The English alphabet is the foundation of the language.",
+        ),
+    ]
+    path = _write_csv(tmp_path, "articles.csv", rows)
+
+    sections = parse_articles_csv(path)
+
+    assert len(sections) == 1
+    assert sections[0].text == "The English alphabet is the foundation of the language."
+
+
+def test_parse_articles_csv_skips_rows_with_existing_audio(tmp_path):
+    from dorosak_factory.course.csv_parser import parse_articles_csv
+
+    rows = [
+        csv_row(
+            section_id="78",
+            item_no=1,
+            content_text="Already recorded article.",
+            item_audio_link="https://dorosak-english.s3.amazonaws.com/already-recorded.wav",
+        ),
+    ]
+    path = _write_csv(tmp_path, "articles.csv", rows)
+
+    sections = parse_articles_csv(path)
+
+    assert sections == []

@@ -18,12 +18,15 @@ import csv
 from pathlib import Path
 
 from dorosak_factory.course.models import (
+    ArticleSection,
     BilingualItem,
     BilingualSection,
     Book,
     CourseLesson,
     DialogueLine,
     DialogueSection,
+    PhraseItem,
+    PhraseSection,
     Unit,
 )
 
@@ -114,3 +117,40 @@ def parse_examples_csv(path: Path) -> list[BilingualSection]:
 def parse_vocabulary_csv(path: Path) -> list[BilingualSection]:
     """Parses vocabulary.csv: "English\\tArabic" word pairs, grouped per lesson."""
     return _parse_bilingual_csv(path, split_bilingual_tab)
+
+
+def parse_useful_phrases_csv(path: Path) -> list[PhraseSection]:
+    """Parses useful_phrases.csv: plain English phrases, grouped per lesson."""
+    rows = _read_rows(path)
+    sections: list[PhraseSection] = []
+    for section_rows in _group_by_section(rows).values():
+        kept_rows = [r for r in section_rows if not _has_existing_audio(r)]
+        if not kept_rows:
+            continue
+        book, unit, lesson = _book_unit_lesson(kept_rows[0])
+        ordered = sorted(kept_rows, key=lambda r: int(r["item_no"]))
+        items = tuple(
+            PhraseItem(item_no=int(r["item_no"]), text=r["item_text"].strip()) for r in ordered
+        )
+        sections.append(PhraseSection(book=book, unit=unit, lesson=lesson, items=items))
+    return sections
+
+
+def parse_articles_csv(path: Path) -> list[ArticleSection]:
+    """Parses articles.csv: one reading passage per lesson.
+
+    Unlike the other 4 CSVs, the spoken content lives in `content_text`
+    (the article body), not `item_text` (just a short title like
+    "Article (Alphabet Basics)").
+    """
+    rows = _read_rows(path)
+    sections: list[ArticleSection] = []
+    for section_rows in _group_by_section(rows).values():
+        kept_rows = [r for r in section_rows if not _has_existing_audio(r)]
+        if not kept_rows:
+            continue
+        book, unit, lesson = _book_unit_lesson(kept_rows[0])
+        ordered = sorted(kept_rows, key=lambda r: int(r["item_no"]))
+        text = " ".join(r["content_text"].strip() for r in ordered if r["content_text"].strip())
+        sections.append(ArticleSection(book=book, unit=unit, lesson=lesson, text=text))
+    return sections
